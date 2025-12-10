@@ -9,7 +9,7 @@ import cron from "node-cron";
 import fs from "fs";
 import path from "path";
 import { google } from "googleapis";
-import ytdlp from "yt-dlp-exec";
+import ytdlp from "youtube-dl-exec";
 import { fileURLToPath } from "url";
 
 // =============== ENV SECRETS (Render Dashboard) ===============
