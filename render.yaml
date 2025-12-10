@@ -1,8 +1,7 @@
 services:
   - type: web
-    name: yt-auto-bot
+    name: yt-auto-uploader
     env: node
-    region: frankfurt
     buildCommand: |
       apt-get update
       apt-get install -y python3 python3-pip ffmpeg
