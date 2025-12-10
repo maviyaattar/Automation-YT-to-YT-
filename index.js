@@ -1,126 +1,227 @@
 ////////////////////////////////////////////////////////////
-//   YOUTUBE SHORTS AUTO BOT — RENDER SECURE VERSION     //
+//  YT SHORTS AUTO UPLOADER — FINAL QUEUE ENGINE V1.0     //
 ////////////////////////////////////////////////////////////
 
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import cron from "node-cron";
-import fetch from "node-fetch";
 import fs from "fs";
-import { exec } from "child_process";
+import path from "path";
 import { google } from "googleapis";
+import ytdlp from "yt-dlp-exec";
+import { fileURLToPath } from "url";
 
-// ===== ENV CONFIG (now safe) =====
+// =============== ENV SECRETS (Render Dashboard) ===============
 const {
   MONGO_URI,
-  YT_API_KEY,
   YT_CLIENT_ID,
   YT_CLIENT_SECRET,
   YT_REFRESH_TOKEN,
   DAILY_LIMIT
 } = process.env;
 
-console.log("\n🚀 Secure Render Bot Started\n");
+const UPLOAD_PER_DAY = Number(DAILY_LIMIT || 5);
 
+// =============== APP INITIALIZE ===============
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-//////////////////// DATABASE ///////////////////
+console.log("\n🚀 YT Auto Queue Bot Started\n");
+
+// =============== DATABASE CONNECT ===============
 mongoose.connect(MONGO_URI)
-.then(()=>console.log("✔ MongoDB Connected Securely"))
-.catch(e=>console.log("❌ DB ERROR:",e));
+.then(()=>console.log("✔ MongoDB Connected"))
+.catch(e=>console.log("❌ MongoDB Error:",e));
 
-const Video = mongoose.model("Video",new mongoose.Schema({
-  title:String,url:String,file:String,
-  status:{type:String,default:"pending"},
-  uploadedAt:Date
-}));
+// =============== VIDEO SCHEMA ===============
+const Video = mongoose.model(
+  "Video",
+  new mongoose.Schema({
+    url:String,
+    title:String,
+    file:String,
+    status:{
+      type:String,
+      enum:["pending","downloading","downloaded","uploaded","failed"],
+      default:"pending"
+    },
+    uploadedAt:Date,
+    lastError:String
+  })
+);
 
-//////////////////// FETCH SHORTS ///////////////////
-async function fetchShorts(){
-  const API = `
-    https://www.googleapis.com/youtube/v3/search
-    ?part=snippet&type=video&videoDuration=short&order=viewCount&maxResults=6
-    &q=tech+gadgets&key=${YT_API_KEY}
-  `.replace(/\s+/g,"");
+// =============== FUNCTIONS ===============
 
-  const r=await fetch(API),d=await r.json();
-  if(!d.items) return console.log("❌ API FAIL");
-
-  d.items.forEach(v=>{
-    Video.create({title:v.snippet.title,url:`https://youtube.com/watch?v=${v.id.videoId}`});
-    console.log("➕ Added:",v.snippet.title);
-  });
+function todayStart(){
+  const d=new Date();
+  d.setHours(0,0,0,0);
+  return d;
 }
 
-//////////////////// DOWNLOAD ///////////////////
-async function download(v){
-  return new Promise(resolve=>{
-    const file=`video_${v._id}.mp4`;
-    exec(`yt-dlp -f mp4 -o "${file}" "${v.url}"`,async(err)=>{
-      if(err){ await Video.findByIdAndUpdate(v._id,{status:"failed"}); return resolve(null); }
+// ---- DOWNLOAD ----
+async function downloadVideo(doc){
+  console.log(`\n📥 Downloading → ${doc.url}`);
+  const file=`video_${doc._id}.mp4`;
 
-      await Video.findByIdAndUpdate(v._id,{file,status:"downloaded"});
-      console.log("✔ Downloaded:",file);
-      resolve(file);
+  try{
+    await Video.findByIdAndUpdate(doc._id,{status:"downloading"});
+
+    await ytdlp(doc.url,{
+      output:file,
+      format:"mp4"
     });
-  });
+
+    await Video.findByIdAndUpdate(doc._id,{file,status:"downloaded"});
+    console.log("✔ Downloaded:",file);
+    return file;
+
+  }catch(err){
+    console.log("❌ Download Failed:",err.message);
+    await Video.findByIdAndUpdate(doc._id,{
+      status:"failed",
+      lastError:err.message
+    });
+    return null;
+  }
 }
 
-//////////////////// UPLOAD ///////////////////
-async function upload(v){
-  let fp=`./${v.file}`;
-  if(!fs.existsSync(fp)){ console.log("❌ Missing:",v.file); return; }
 
-  const auth=new google.auth.OAuth2(YT_CLIENT_ID,YT_CLIENT_SECRET,"https://developers.google.com/oauthplayground");
+// ---- UPLOAD ----
+async function uploadVideo(doc){
+  console.log(`\n⏫ Uploading → ${doc.url}`);
+
+  if(!doc.file || !fs.existsSync(doc.file)){
+    console.log("❌ FILE NOT FOUND — Skipping");
+    return;
+  }
+
+  const auth=new google.auth.OAuth2(
+    YT_CLIENT_ID,
+    YT_CLIENT_SECRET,
+    "https://developers.google.com/oauthplayground"
+  );
   auth.setCredentials({refresh_token:YT_REFRESH_TOKEN});
+
   const yt=google.youtube({version:"v3",auth});
+  const stream=fs.createReadStream(doc.file);
 
   try{
     await yt.videos.insert({
       part:"snippet,status",
       requestBody:{
-        snippet:{title:`${v.title} #shorts #tech`,categoryId:"28"},
+        snippet:{
+          title:`${doc.title||"Auto Upload"} #shorts`,
+          description:`Reuploaded from queue → ${doc.url}`,
+          categoryId:"28"
+        },
         status:{privacyStatus:"public"}
       },
-      media:{body:fs.createReadStream(fp)}
+      media:{body:stream}
     });
 
-    console.log("🔥 Uploaded:",v.title);
-    fs.unlinkSync(fp);
-    await Video.findByIdAndUpdate(v._id,{status:"uploaded",uploadedAt:new Date()});
+    fs.unlinkSync(doc.file);
+    await Video.findByIdAndUpdate(doc._id,{status:"uploaded",uploadedAt:new Date()});
+    console.log("🔥 Uploaded + Cleaned:",doc.file);
 
-  }catch(e){ console.log("❌ Upload Error:",e); }
+  }catch(err){
+    console.log("❌ Upload Failed:",err.message);
+    await Video.findByIdAndUpdate(doc._id,{
+      status:"failed",
+      lastError:err.message
+    });
+  }
 }
 
-//////////////////// CRON AUTO ///////////////////
-cron.schedule("*/5 * * * *",async()=>{
 
-  let today=new Date();today.setHours(0,0,0,0);
-  let done=await Video.countDocuments({status:"uploaded",uploadedAt:{$gte:today}});
-  if(done >= (DAILY_LIMIT||4)) return console.log("⛔ Limit reached");
+// ---- MAIN EXECUTION ENGINE ----
+async function processNext(){
 
-  let v=await Video.findOne({status:"pending"})||await Video.findOne({status:"downloaded"});
-  if(!v) return fetchShorts();
+  const uploadedToday=await Video.countDocuments({
+    status:"uploaded",
+    uploadedAt:{$gte:todayStart()}
+  });
 
-  if(v.status=="pending"){
-    let f=await download(v);
-    if(!f) return fetchShorts();
+  console.log(`\n📊 Uploaded Today: ${uploadedToday}/${UPLOAD_PER_DAY}`);
+
+  if(uploadedToday>=UPLOAD_PER_DAY){
+    console.log("⛔ DAILY LIMIT REACHED");
+    return;
   }
 
-  await upload(v);
+  const next=await Video.findOne({
+    status:{$in:["pending","downloaded"]}
+  }).sort({_id:1});
+
+  if(!next){
+    console.log("\n📭 QUEUE EMPTY — Add more URLs");
+    return;
+  }
+
+  if(next.status==="pending"){
+    const file=await downloadVideo(next);
+    if(!file) return;
+    next.file=file;
+  }
+
+  await uploadVideo(next);
+}
+
+
+
+// =============== CRON AUTO UPLOAD (Every 30 mins) ===============
+cron.schedule("*/30 * * * *", async ()=>{
+  console.log("\n⏰ CRON TICK — Checking Queue");
+  await processNext();
 });
 
-//////////////////// MANUAL UPLOAD ///////////////////
+
+
+// =============== API ROUTES ===============
+
+// SINGLE ADD
+app.post("/api/add",async(req,res)=>{
+  const {url,title}=req.body;
+  if(!url) return res.status(400).json({error:"URL required"});
+  const doc=await Video.create({url,title,status:"pending"});
+  res.json({added:true,id:doc._id});
+});
+
+// BULK ADD
+app.post("/api/add-bulk",async(req,res)=>{
+  const {urls}=req.body;
+  if(!urls||!Array.isArray(urls)||urls.length===0)
+    return res.status(400).json({error:"urls[] required"});
+
+  await Video.insertMany(urls.map(u=>({url:u,status:"pending"})));
+  res.json({added:urls.length});
+});
+
+// LIST QUEUE
+app.get("/api/list",async(req,res)=>{
+  const list=await Video.find().sort({_id:1});
+  res.json(list);
+});
+
+// RUN ONE MANUALLY
 app.get("/force-upload",async(req,res)=>{
-  let v=await Video.findOne({status:"pending"})||await Video.findOne({status:"downloaded"});
-  if(!v){ await fetchShorts(); return res.send("Shorts Fetched — Click Again"); }
-  if(v.status=="pending") await download(v);
-  await upload(v);
-  res.send("🔥 Forced Upload Triggered — Check Logs");
+  await processNext();
+  res.send("🔥 One video processed (check logs)");
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`\n🔥 BOT LIVE ON PORT ${PORT}\n`));
+
+
+// =============== ADMIN PANEL SERVE ===============
+const __filename=fileURLToPath(import.meta.url);
+const __dirname=path.dirname(__filename);
+
+app.get("/admin",(req,res)=>{
+  res.sendFile(path.join(__dirname,"admin.html"));
+});
+
+
+
+// =============== START SERVER ===============
+const PORT=process.env.PORT||3000;
+app.listen(PORT,()=>console.log(`\n🔥 BOT LIVE @ PORT ${PORT}\n`));
