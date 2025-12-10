@@ -34,7 +34,7 @@ async function processVideo(video){
     const savePath = path.join(process.cwd(), filename);   // <---- FINAL FIX
 
     await new Promise(res=>{
-        const d = spawn("yt-dlp",["-f","mp4","-o",savePath,video.url]);
+        const d = spawn("yt-dlp",["-o",savePath,video.url]);
         d.stdout.on("data",x=>console.log("▶",x.toString()));
         d.stderr.on("data",x=>console.log("⚠",x.toString()));
         d.on("close",res);
