@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>YT Auto Queue Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #050816;
+      --bg-alt: #0b1020;
+      --card: rgba(15, 23, 42, 0.95);
+      --accent: #6366f1;
+      --accent-soft: rgba(99, 102, 241, 0.15);
+      --accent-2: #22c55e;
+      --accent-3: #f97316;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --danger: #f97373;
+      --radius-xl: 18px;
+      --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.8);
+      --border-subtle: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1d2439 0, #020617 45%, #000 100%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 1150px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .title-block h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .title-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #22c55e, #4ade80);
+      color: #0f172a;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .title-block p {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badge-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      background: rgba(22, 163, 74, 0.16);
+      border: 1px solid rgba(34, 197, 94, 0.45);
+      color: #bbf7d0;
+    }
+
+    .dot-live {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.4);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.4fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius-xl);
+      border: var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 16px 18px 18px;
+      backdrop-filter: blur(16px);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(
+        circle at top right,
+        rgba(96, 165, 250, 0.09),
+        transparent 55%
+      );
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .chip {
+      padding: 2px 8px;
+      font-size: 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.65);
+      color: var(--muted);
+    }
+
+    .chip-accent {
+      border-color: rgba(129, 140, 248, 0.8);
+      background: rgba(79, 70, 229, 0.16);
+      color: #a5b4fc;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    input[type="text"],
+    textarea {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      font-size: 13px;
+      padding: 8px 10px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+
+    input[type="text"]:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.7);
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 90px;
+      max-height: 180px;
+    }
+
+    small {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 7px 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(148, 163, 184, 0.2);
+      color: var(--text);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease,
+        opacity 0.12s ease;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, #6366f1, #22c55e);
+      color: #0b1120;
+      box-shadow: 0 10px 30px rgba(129, 140, 248, 0.45);
+    }
+
+    button.accent {
+      background: rgba(59, 130, 246, 0.18);
+      color: #bfdbfe;
+      border: 1px solid rgba(96, 165, 250, 0.75);
+    }
+
+    button.ghost {
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    button.danger {
+      background: rgba(248, 113, 113, 0.2);
+      color: #fecaca;
+      border: 1px solid rgba(248, 113, 113, 0.7);
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.75);
+      opacity: 0.95;
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 4px 18px rgba(15, 23, 42, 0.9);
+      opacity: 0.9;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    .btn-sm {
+      padding: 4px 9px;
+      font-size: 11px;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    .stat-pill {
+      flex: 1;
+      min-width: 90px;
+      border-radius: 12px;
+      padding: 8px 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.5);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .stat-value {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .stat-pill.pending .stat-value {
+      color: #fbbf24;
+    }
+    .stat-pill.uploaded .stat-value {
+      color: #4ade80;
+    }
+    .stat-pill.failed .stat-value {
+      color: #f97373;
+    }
+    .stat-pill.total .stat-value {
+      color: #a5b4fc;
+    }
+
+    .queue-table {
+      width: 100%;
+      border-spacing: 0;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .queue-header {
+      text-align: left;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    .queue-header th {
+      padding: 6px 6px;
+      font-weight: 500;
+    }
+
+    .queue-row td {
+      padding: 7px 6px;
+      border-bottom: 1px solid rgba(30, 41, 59, 0.9);
+    }
+
+    .queue-row:nth-child(even) {
+      background: rgba(15, 23, 42, 0.86);
+    }
+
+    .queue-row:nth-child(odd) {
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    .status-pill {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-pill span.dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+    }
+
+    .status-pending {
+      background: rgba(251, 191, 36, 0.18);
+      color: #facc15;
+      border: 1px solid rgba(250, 204, 21, 0.7);
+    }
+
+    .status-pending span.dot {
+      background: #facc15;
+    }
+
+    .status-downloaded {
+      background: rgba(52, 211, 153, 0.22);
+      color: #6ee7b7;
+      border: 1px solid rgba(45, 212, 191, 0.8);
+    }
+
+    .status-downloaded span.dot {
+      background: #6ee7b7;
+    }
+
+    .status-uploaded {
+      background: rgba(34, 197, 94, 0.18);
+      color: #bbf7d0;
+      border: 1px solid rgba(22, 163, 74, 0.8);
+    }
+
+    .status-uploaded span.dot {
+      background: #22c55e;
+    }
+
+    .status-failed {
+      background: rgba(248, 113, 113, 0.2);
+      color: #fecaca;
+      border: 1px solid rgba(248, 113, 113, 0.85);
+    }
+
+    .status-failed span.dot {
+      background: #f97373;
+    }
+
+    .queue-url {
+      max-width: 380px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #e5e7eb;
+    }
+
+    .queue-time {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .queue-empty {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      padding: 28px 0 20px;
+    }
+
+    .footer {
+      margin-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .footer small strong {
+      color: #e5e7eb;
+    }
+
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      min-width: 220px;
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 12px;
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      background: rgba(15, 23, 42, 0.98);
+      border: 1px solid rgba(148, 163, 184, 0.7);
+      color: var(--text);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.95);
+      opacity: 0;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 50;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .toast span.icon {
+      font-size: 14px;
+      margin-top: 2px;
+    }
+
+    .toast.success {
+      border-color: rgba(34, 197, 94, 0.8);
+    }
+
+    .toast.error {
+      border-color: rgba(248, 113, 113, 0.9);
+    }
+
+    .toast button {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 0;
+      margin-left: auto;
+      box-shadow: none;
+    }
+
+    .tag-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: var(--muted);
+      background: rgba(15, 23, 42, 0.7);
+    }
+
+    @media (max-width: 900px) {
+      .grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 16px;
+      }
+      .card {
+        padding: 14px 12px 14px;
+      }
+      .title-block h1 {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="title-block">
+        <h1>
+          YT Auto Queue Admin
+          <span class="title-pill">Shorts Engine</span>
+        </h1>
+        <p>Control your 100+ shorts queue — add URLs, monitor status, and trigger uploads.</p>
+      </div>
+      <div>
+        <div class="badge-live">
+          <span class="dot-live"></span>
+          Bot Online
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="grid">
+        <!-- LEFT: Queue + Stats -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">📊 Queue & Status</div>
+              <div class="card-sub">Live list of all URLs in your automation queue.</div>
+            </div>
+            <button class="accent btn-sm" id="refreshBtn">⟳ Refresh</button>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-pill total">
+              <div class="stat-label">Total</div>
+              <div class="stat-value" id="stat-total">–</div>
+            </div>
+            <div class="stat-pill pending">
+              <div class="stat-label">Pending</div>
+              <div class="stat-value" id="stat-pending">–</div>
+            </div>
+            <div class="stat-pill uploaded">
+              <div class="stat-label">Uploaded</div>
+              <div class="stat-value" id="stat-uploaded">–</div>
+            </div>
+            <div class="stat-pill failed">
+              <div class="stat-label">Failed</div>
+              <div class="stat-value" id="stat-failed">–</div>
+            </div>
+          </div>
+
+          <div style="margin-top: 10px; position:relative; z-index:1;">
+            <table class="queue-table">
+              <thead class="queue-header">
+                <tr>
+                  <th style="width:40px;">#</th>
+                  <th style="width:120px;">Status</th>
+                  <th>URL</th>
+                  <th style="width:140px;">Last Upload</th>
+                </tr>
+              </thead>
+              <tbody id="queueBody"></tbody>
+            </table>
+            <div id="queueEmpty" class="queue-empty" style="display:none;">
+              No videos in queue yet. Add a URL on the right to get started.
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: Controls -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                🧰 Controls
+              </div>
+              <div class="card-sub">Add URLs, bulk import, and force upload from here.</div>
+            </div>
+            <span class="chip-accent chip">Daily Limit ⚡</span>
+          </div>
+
+          <div class="input-group">
+            <label for="singleUrl">Single URL</label>
+            <input
+              type="text"
+              id="singleUrl"
+              placeholder="https://youtube.com/shorts/..."
+            />
+            <small>Fast add for one short. The bot will upload in queue order.</small>
+            <div class="btn-row">
+              <button id="btnSingleAdd" class="primary">➕ Add URL</button>
+            </div>
+          </div>
+
+          <div class="input-group">
+            <label for="bulkUrls">Bulk URLs</label>
+            <textarea
+              id="bulkUrls"
+              placeholder="Paste one URL per line…"
+            ></textarea>
+            <small>Perfect when you have 20–100 shorts. One link per line.</small>
+            <div class="btn-row">
+              <button id="btnBulkAdd" class="accent">📥 Add All</button>
+              <button id="btnBulkClear" class="ghost">Clear</button>
+            </div>
+          </div>
+
+          <div class="input-group" style="margin-top: 4px;">
+            <label>Upload Control</label>
+            <small>
+              <span class="tag-pill">Auto: every ~30 minutes</span>
+              <span class="tag-pill">Limit: <span id="limitLabel">4/day</span></span>
+            </small>
+            <div class="btn-row" style="margin-top:8px;">
+              <button id="btnForce" class="danger">🔥 Force Upload Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <small>Queue engine: <strong>pending → downloaded → uploaded</strong></small>
+        <small>Backend: <strong>/api/add</strong>, <strong>/api/add-bulk</strong>, <strong>/api/list</strong>, <strong>/force-upload</strong></small>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="toast">
+    <span class="icon">⚡</span>
+    <span id="toastText">Message here</span>
+    <button onclick="hideToast()">✕</button>
+  </div>
+
+  <script>
+    const BASE = window.location.origin; // works on localhost + Render
+    const toastEl = document.getElementById("toast");
+    const toastText = document.getElementById("toastText");
+    let toastTimeout = null;
+
+    function showToast(msg, type = "success") {
+      toastText.textContent = msg;
+      toastEl.classList.remove("success", "error");
+      toastEl.classList.add(type === "error" ? "error" : "success");
+      toastEl.classList.add("show");
+
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        hideToast();
+      }, 3500);
+    }
+
+    function hideToast() {
+      toastEl.classList.remove("show");
+    }
+
+    const statTotal = document.getElementById("stat-total");
+    const statPending = document.getElementById("stat-pending");
+    const statUploaded = document.getElementById("stat-uploaded");
+    const statFailed = document.getElementById("stat-failed");
+    const queueBody = document.getElementById("queueBody");
+    const queueEmpty = document.getElementById("queueEmpty");
+    const limitLabel = document.getElementById("limitLabel");
+
+    async function refreshQueue() {
+      try {
+        document.getElementById("refreshBtn").disabled = true;
+        const res = await fetch(BASE + "/api/list");
+        const data = await res.json();
+
+        const total = data.length;
+        const pending = data.filter(v => v.status === "pending").length;
+        const downloaded = data.filter(v => v.status === "downloaded").length;
+        const uploaded = data.filter(v => v.status === "uploaded").length;
+        const failed = data.filter(v => v.status === "failed").length;
+
+        statTotal.textContent = total;
+        statPending.textContent = pending;
+        statUploaded.textContent = uploaded;
+        statFailed.textContent = failed;
+
+        queueBody.innerHTML = "";
+        if (!data.length) {
+          queueEmpty.style.display = "block";
+        } else {
+          queueEmpty.style.display = "none";
+          data.forEach((v, idx) => {
+            const tr = document.createElement("tr");
+            tr.className = "queue-row";
+
+            const statusClass =
+              v.status === "uploaded"
+                ? "status-uploaded"
+                : v.status === "downloaded"
+                ? "status-downloaded"
+                : v.status === "failed"
+                ? "status-failed"
+                : "status-pending";
+
+            const uploadedAt = v.uploadedAt
+              ? new Date(v.uploadedAt).toLocaleString()
+              : "—";
+
+            tr.innerHTML = `
+              <td>${idx + 1}</td>
+              <td>
+                <span class="status-pill ${statusClass}">
+                  <span class="dot"></span>
+                  ${v.status.toUpperCase()}
+                </span>
+              </td>
+              <td>
+                <div class="queue-url" title="${v.url}">${v.url}</div>
+              </td>
+              <td>
+                <div class="queue-time">${uploadedAt}</div>
+              </td>
+            `;
+            queueBody.appendChild(tr);
+          });
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to load queue list", "error");
+      } finally {
+        document.getElementById("refreshBtn").disabled = false;
+      }
+    }
+
+    async function addSingleUrl() {
+      const input = document.getElementById("singleUrl");
+      const url = input.value.trim();
+      if (!url) return showToast("Paste a URL first.", "error");
+
+      const btn = document.getElementById("btnSingleAdd");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(BASE + "/api/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        showToast("URL added to queue ✅");
+        input.value = "";
+        refreshQueue();
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to add URL", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function addBulkUrls() {
+      const ta = document.getElementById("bulkUrls");
+      const raw = ta.value.trim();
+      if (!raw) return showToast("Paste some URLs first.", "error");
+
+      const urls = raw
+        .split("\n")
+        .map(u => u.trim())
+        .filter(u => u.length > 5);
+
+      if (!urls.length) return showToast("No valid URLs found.", "error");
+
+      const btn = document.getElementById("btnBulkAdd");
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(BASE + "/api/add-bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ urls })
+        });
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        showToast(`Added ${data.added || urls.length} URLs to queue ✅`);
+        ta.value = "";
+        refreshQueue();
+      } catch (err) {
+        console.error(err);
+        showToast("Bulk add failed", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function clearBulk() {
+      document.getElementById("bulkUrls").value = "";
+    }
+
+    async function forceUpload() {
+      const btn = document.getElementById("btnForce");
+      btn.disabled = true;
+      showToast("Force upload started… check logs.", "success");
+
+      try {
+        const res = await fetch(BASE + "/force-upload");
+        const text = await res.text();
+        console.log("Force upload:", text);
+        refreshQueue();
+      } catch (err) {
+        console.error(err);
+        showToast("Force upload failed", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", refreshQueue);
+    document.getElementById("btnSingleAdd").addEventListener("click", addSingleUrl);
+    document.getElementById("btnBulkAdd").addEventListener("click", addBulkUrls);
+    document.getElementById("btnBulkClear").addEventListener("click", clearBulk);
+    document.getElementById("btnForce").addEventListener("click", forceUpload);
+
+    // Try to read daily limit from backend env via HTML data, else use default text
+    (function initLimit() {
+      // You can manually adjust this if needed
+      limitLabel.textContent = (window.DAILY_LIMIT || 4) + "/day";
+    })();
+
+    // Initial load
+    refreshQueue();
+  </script>
+</body>
+</html>
