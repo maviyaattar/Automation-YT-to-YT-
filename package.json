@@ -11,6 +11,6 @@
     "googleapis": "^131.0.0",
     "cors": "^2.8.5",
     "node-cron": "^3.0.2",
-    "yt-dlp-exec": "^1.4.0"
+    "youtube-dl-exec": "^2.4.8"
   }
 }
