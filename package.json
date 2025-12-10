@@ -1,5 +1,5 @@
 {
-  "name": "yt-short-bot",
+  "name": "yt-auto-bot",
   "type": "module",
   "scripts": {
     "start": "node index.js"
