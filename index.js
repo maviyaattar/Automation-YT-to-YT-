@@ -1,6 +1,6 @@
-////////////////////////////////////////////////////////////
-//  YT SHORTS AUTO UPLOADER — FINAL QUEUE ENGINE V1.0     //
-////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+// YT Auto Upload Queue Bot — FINAL v3.0 🔥       //
+////////////////////////////////////////////////////
 
 import express from "express";
 import mongoose from "mongoose";
@@ -12,7 +12,10 @@ import { google } from "googleapis";
 import ytdlp from "youtube-dl-exec";
 import { fileURLToPath } from "url";
 
-// =============== ENV SECRETS (Render Dashboard) ===============
+// ⚠ Load ENV from Render or Local .env if exists
+import dotenv from "dotenv";
+dotenv.config();
+
 const {
   MONGO_URI,
   YT_CLIENT_ID,
@@ -21,49 +24,42 @@ const {
   DAILY_LIMIT
 } = process.env;
 
-const UPLOAD_PER_DAY = Number(DAILY_LIMIT || 5);
+const DAILY_UPLOAD = Number(DAILY_LIMIT || 4);
 
-// =============== APP INITIALIZE ===============
+// App Init
 const app = express();
 app.use(cors());
 app.use(express.json());
+console.log("\n🚀 BOT STARTED\n");
 
-console.log("\n🚀 YT Auto Queue Bot Started\n");
-
-// =============== DATABASE CONNECT ===============
+// Mongo Connect
 mongoose.connect(MONGO_URI)
 .then(()=>console.log("✔ MongoDB Connected"))
-.catch(e=>console.log("❌ MongoDB Error:",e));
+.catch(err=>console.log("❌ Mongo Error",err));
 
-// =============== VIDEO SCHEMA ===============
-const Video = mongoose.model(
-  "Video",
-  new mongoose.Schema({
-    url:String,
-    title:String,
-    file:String,
-    status:{
-      type:String,
-      enum:["pending","downloading","downloaded","uploaded","failed"],
-      default:"pending"
-    },
-    uploadedAt:Date,
-    lastError:String
-  })
-);
+// Schema
+const Video = mongoose.model("Video", new mongoose.Schema({
+  url:String,
+  file:String,
+  title:String,
+  status:{type:String, default:"pending"}, // pending/downloading/downloaded/uploaded/failed
+  uploadedAt:Date,
+  lastError:String
+}));
 
-// =============== FUNCTIONS ===============
-
-function todayStart(){
-  const d=new Date();
-  d.setHours(0,0,0,0);
-  return d;
+// Helpers
+function today(){
+  let d=new Date(); d.setHours(0,0,0,0); return d;
 }
 
-// ---- DOWNLOAD ----
+// ===================== DOWNLOAD =====================
 async function downloadVideo(doc){
-  console.log(`\n📥 Downloading → ${doc.url}`);
-  const file=`video_${doc._id}.mp4`;
+
+  const file = (process.env.RENDER=== "true")
+  ? `/opt/render/project/src/video_${doc._id}.mp4`  // Render path
+  : `./video_${doc._id}.mp4`;                       // Local PC path
+
+  console.log("📥 Downloading:",doc.url);
 
   try{
     await Video.findByIdAndUpdate(doc._id,{status:"downloading"});
@@ -77,23 +73,20 @@ async function downloadVideo(doc){
     console.log("✔ Downloaded:",file);
     return file;
 
-  }catch(err){
-    console.log("❌ Download Failed:",err.message);
-    await Video.findByIdAndUpdate(doc._id,{
-      status:"failed",
-      lastError:err.message
-    });
+  }catch(e){
+    console.log("❌ Download Failed:",e.message);
+    await Video.findByIdAndUpdate(doc._id,{status:"failed",lastError:e.message});
     return null;
   }
 }
 
 
-// ---- UPLOAD ----
+// ===================== UPLOAD =====================
 async function uploadVideo(doc){
-  console.log(`\n⏫ Uploading → ${doc.url}`);
 
   if(!doc.file || !fs.existsSync(doc.file)){
-    console.log("❌ FILE NOT FOUND — Skipping");
+    console.log("❌ FILE NOT FOUND — Listing directory...");
+    console.log(fs.readdirSync(process.cwd()));
     return;
   }
 
@@ -107,13 +100,15 @@ async function uploadVideo(doc){
   const yt=google.youtube({version:"v3",auth});
   const stream=fs.createReadStream(doc.file);
 
+  console.log("⏫ Uploading:",doc.url);
+
   try{
     await yt.videos.insert({
       part:"snippet,status",
       requestBody:{
         snippet:{
-          title:`${doc.title||"Auto Upload"} #shorts`,
-          description:`Reuploaded from queue → ${doc.url}`,
+          title:(doc.title||"Auto Upload")+" #shorts",
+          description:`Uploaded via Automation Bot\n${doc.url}`,
           categoryId:"28"
         },
         status:{privacyStatus:"public"}
@@ -123,105 +118,62 @@ async function uploadVideo(doc){
 
     fs.unlinkSync(doc.file);
     await Video.findByIdAndUpdate(doc._id,{status:"uploaded",uploadedAt:new Date()});
-    console.log("🔥 Uploaded + Cleaned:",doc.file);
+    console.log("🔥 UPLOADED + FILE REMOVED\n");
 
-  }catch(err){
-    console.log("❌ Upload Failed:",err.message);
-    await Video.findByIdAndUpdate(doc._id,{
-      status:"failed",
-      lastError:err.message
-    });
+  }catch(e){
+    console.log("❌ Upload Error:",e.message);
+    await Video.findByIdAndUpdate(doc._id,{status:"failed",lastError:e.message});
   }
 }
 
 
-// ---- MAIN EXECUTION ENGINE ----
-async function processNext(){
+// ===================== ENGINE =====================
+async function processQueue(){
 
-  const uploadedToday=await Video.countDocuments({
-    status:"uploaded",
-    uploadedAt:{$gte:todayStart()}
-  });
+  const done = await Video.countDocuments({status:"uploaded",uploadedAt:{$gte:today()}});
+  console.log(`\n📊 Uploaded Today: ${done}/${DAILY_UPLOAD}`);
 
-  console.log(`\n📊 Uploaded Today: ${uploadedToday}/${UPLOAD_PER_DAY}`);
+  if(done>=DAILY_UPLOAD) return console.log("🚫 DAILY LIMIT REACHED");
 
-  if(uploadedToday>=UPLOAD_PER_DAY){
-    console.log("⛔ DAILY LIMIT REACHED");
-    return;
-  }
-
-  const next=await Video.findOne({
-    status:{$in:["pending","downloaded"]}
-  }).sort({_id:1});
-
-  if(!next){
-    console.log("\n📭 QUEUE EMPTY — Add more URLs");
-    return;
-  }
+  let next = await Video.findOne({status:"pending"}) || await Video.findOne({status:"downloaded"});
+  if(!next) return console.log("📭 No pending videos");
 
   if(next.status==="pending"){
-    const file=await downloadVideo(next);
+    let file = await downloadVideo(next);
     if(!file) return;
-    next.file=file;
   }
 
   await uploadVideo(next);
 }
 
+// Auto every 30 min
+cron.schedule("*/30 * * * *",()=>processQueue());
 
+// ===== API =====
 
-// =============== CRON AUTO UPLOAD (Every 30 mins) ===============
-cron.schedule("*/30 * * * *", async ()=>{
-  console.log("\n⏰ CRON TICK — Checking Queue");
-  await processNext();
-});
-
-
-
-// =============== API ROUTES ===============
-
-// SINGLE ADD
 app.post("/api/add",async(req,res)=>{
-  const {url,title}=req.body;
-  if(!url) return res.status(400).json({error:"URL required"});
-  const doc=await Video.create({url,title,status:"pending"});
+  let doc = await Video.create({url:req.body.url});
   res.json({added:true,id:doc._id});
 });
 
-// BULK ADD
 app.post("/api/add-bulk",async(req,res)=>{
-  const {urls}=req.body;
-  if(!urls||!Array.isArray(urls)||urls.length===0)
-    return res.status(400).json({error:"urls[] required"});
-
-  await Video.insertMany(urls.map(u=>({url:u,status:"pending"})));
-  res.json({added:urls.length});
+  await Video.insertMany(req.body.urls.map(u=>({url:u})));
+  res.json({added:req.body.urls.length});
 });
 
-// LIST QUEUE
 app.get("/api/list",async(req,res)=>{
-  const list=await Video.find().sort({_id:1});
-  res.json(list);
+  res.json(await Video.find().sort({_id:1}));
 });
 
-// RUN ONE MANUALLY
 app.get("/force-upload",async(req,res)=>{
-  await processNext();
-  res.send("🔥 One video processed (check logs)");
+  processQueue();
+  res.send("🔥 Upload Started — Check Logs");
 });
 
-
-
-// =============== ADMIN PANEL SERVE ===============
+// Serve Admin Panel
 const __filename=fileURLToPath(import.meta.url);
 const __dirname=path.dirname(__filename);
+app.get("/admin",(req,res)=>res.sendFile(path.join(__dirname,"admin.html")));
 
-app.get("/admin",(req,res)=>{
-  res.sendFile(path.join(__dirname,"admin.html"));
-});
-
-
-
-// =============== START SERVER ===============
-const PORT=process.env.PORT||3000;
-app.listen(PORT,()=>console.log(`\n🔥 BOT LIVE @ PORT ${PORT}\n`));
+// Start
+app.listen(process.env.PORT||3000,()=>console.log("🔥 LIVE",process.env.PORT||3000));
