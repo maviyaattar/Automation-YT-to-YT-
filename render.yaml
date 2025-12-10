@@ -2,7 +2,10 @@ services:
   - type: web
     name: yt-auto-bot
     env: node
-    plan: free
-    buildCommand: npm install
-    startCommand: node index.js
-    autoDeploy: true
+    region: frankfurt
+    buildCommand: |
+      apt-get update
+      apt-get install -y python3 python3-pip ffmpeg
+      pip3 install yt-dlp
+      npm install
+    startCommand: "npm start"
