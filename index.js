@@ -122,4 +122,5 @@ app.get("/force-upload",async(req,res)=>{
   res.send("🔥 Forced Upload Triggered — Check Logs");
 });
 
-app.listen(3000,()=>console.log("\n🔥 SECURE BOT LIVE\n"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`\n🔥 BOT LIVE ON PORT ${PORT}\n`));
